@@ -1,4 +1,4 @@
-import { fetchAuth, fetchData } from "../fetchData";
+import { fetchAuth, fetchData } from "./fetchData";
 
 export const authApi = {
   register: async (name: string, email: string, password: string) => {

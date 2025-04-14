@@ -8,6 +8,7 @@ interface Board {
   _id: string;
   title: string;
   description?: string;
+  backgroundColor?: string;
 }
 
 export default function BoardsPage() {
@@ -15,7 +16,10 @@ export default function BoardsPage() {
   const router = useRouter();
   const [boards, setBoards] = useState<Board[]>([]);
   const [newBoardTitle, setNewBoardTitle] = useState("");
+  const [newBoardDescription, setNewBoardDescription] = useState("");
+  const [newBoardColor, setNewBoardColor] = useState("#0076A8"); // Default color
   const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false); // State to toggle form visibility
 
   useEffect(() => {
     if (!loading && !user) {
@@ -54,7 +58,11 @@ export default function BoardsPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title: newBoardTitle }),
+        body: JSON.stringify({
+          title: newBoardTitle,
+          description: newBoardDescription,
+          backgroundColor: newBoardColor,
+        }),
         credentials: "include",
       });
 
@@ -63,6 +71,9 @@ export default function BoardsPage() {
       const newBoard = await response.json();
       setBoards([...boards, newBoard]);
       setNewBoardTitle("");
+      setNewBoardDescription("");
+      setNewBoardColor("#0076A8"); // Reset to default color
+      setShowForm(false); // Hide the form after creation
     } catch (error) {
       console.error("Error creating board:", error);
       setError("Failed to create board");
@@ -104,37 +115,73 @@ export default function BoardsPage() {
           </div>
         )}
 
-        <form onSubmit={handleCreateBoard} className="mb-8">
-          <div className="flex gap-4">
-            <input
-              type="text"
-              value={newBoardTitle}
-              onChange={(e) => setNewBoardTitle(e.target.value)}
-              placeholder="Enter board title"
-              className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Create Board
-            </button>
-          </div>
-        </form>
+        {/* Create Board Button */}
+        <div className="mb-8">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="w-full p-6 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          >
+            {showForm ? "Cancel" : "Create New Board"}
+          </button>
+        </div>
+
+        {/* Create Board Form */}
+        {showForm && (
+          <form
+            onSubmit={handleCreateBoard}
+            className="mb-8 p-6 bg-white rounded-lg shadow-sm"
+          >
+            <div className="flex flex-col gap-4">
+              <input
+                type="text"
+                value={newBoardTitle}
+                onChange={(e) => setNewBoardTitle(e.target.value)}
+                placeholder="Enter board title"
+                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+              <textarea
+                value={newBoardDescription}
+                onChange={(e) => setNewBoardDescription(e.target.value)}
+                placeholder="Enter board description"
+                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                rows={3}
+              />
+              <input
+                type="color"
+                value={newBoardColor}
+                onChange={(e) => setNewBoardColor(e.target.value)}
+                className="w-16 h-10 border-none"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Create Board
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {boards.map((board) => (
             <div
               key={board._id}
               onClick={() => router.push(`/boards/${board._id}`)}
-              className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+              className="rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer"
             >
-              <h3 className="text-lg font-medium text-gray-900">
-                {board.title}
-              </h3>
-              {board.description && (
-                <p className="mt-1 text-gray-500">{board.description}</p>
-              )}
+              <div
+                className="h-32 rounded-t-lg"
+                style={{ backgroundColor: board.backgroundColor || "#ffffff" }}
+              ></div>
+              <div className="p-6">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {board.title}
+                </h3>
+                {board.description && (
+                  <p className="mt-1 text-gray-500">{board.description}</p>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -19,6 +19,8 @@ interface Card {
   description?: string;
   list: string;
   position: number;
+  completed: boolean;
+  dueDate?: Date;
 }
 
 interface List {
@@ -34,6 +36,7 @@ interface Board {
   title: string;
   description?: string;
   lists: List[];
+  backgroundColor?: string;
 }
 
 export default function BoardPage() {
@@ -46,6 +49,8 @@ export default function BoardPage() {
   const [activeList, setActiveList] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [error, setError] = useState("");
+  const [activeMenuListId, setActiveMenuListId] = useState<string | null>(null);
+  const [showListForm, setShowListForm] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -104,6 +109,7 @@ export default function BoardPage() {
           : null
       );
       setNewListTitle("");
+      setShowListForm(false);
     } catch (error) {
       console.error("Error creating list:", error);
       setError("Failed to create list");
@@ -189,29 +195,52 @@ export default function BoardPage() {
       const destList = board.lists.find(
         (list) => list._id === destination.droppableId
       );
-
       if (!sourceList || !destList) return;
 
-      const sourceCards = Array.from(sourceList.cards);
-      const destCards = Array.from(destList.cards);
-      const [removed] = sourceCards.splice(source.index, 1);
-      destCards.splice(destination.index, 0, removed);
+      console.log(result);
+      console.log(sourceList, destList);
 
-      setBoard((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          lists: prev.lists.map((list) => {
-            if (list._id === sourceList._id) {
-              return { ...list, cards: sourceCards };
-            }
-            if (list._id === destList._id) {
-              return { ...list, cards: destCards };
-            }
-            return list;
-          }),
-        };
-      });
+      // Moving card within the same list
+      if (destination.droppableId === sourceList._id) {
+        console.log("Moving card within the same list");
+        const sourceCards = Array.from(sourceList.cards);
+        const [removed] = sourceCards.splice(source.index, 1);
+        sourceCards.splice(destination.index, 0, removed);
+        setBoard((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            lists: prev.lists.map((list) => {
+              if (list._id === sourceList._id) {
+                return { ...list, cards: sourceCards };
+              }
+              return list;
+            }),
+          };
+        });
+      } else {
+        // Moving card between lists
+        const sourceCards = Array.from(sourceList.cards);
+        const destCards = Array.from(destList.cards);
+        const [removed] = sourceCards.splice(source.index, 1);
+        destCards.splice(destination.index, 0, removed);
+
+        setBoard((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            lists: prev.lists.map((list) => {
+              if (list._id === sourceList._id) {
+                return { ...list, cards: sourceCards };
+              }
+              if (list._id === destList._id) {
+                return { ...list, cards: destCards };
+              }
+              return list;
+            }),
+          };
+        });
+      }
 
       try {
         await fetch(`http://localhost:5000/api/cards/${draggableId}`, {
@@ -248,6 +277,70 @@ export default function BoardPage() {
     });
   };
 
+  const toggleMenu = (listId: string) => {
+    setActiveMenuListId((prev) => (prev === listId ? null : listId));
+  };
+
+  const handleDeleteList = async (listId: string) => {
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/lists/${listId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to delete list");
+
+      // Update the board state to remove the deleted list
+      setBoard((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          lists: prev.lists.filter((list) => list._id !== listId),
+        };
+      });
+    } catch (error) {
+      console.error("Error deleting list:", error);
+      setError("Failed to delete list");
+    }
+  };
+
+  const handleCardCompletionToggle = async (card: Card) => {
+    try {
+      const updatedCard = {
+        ...card,
+        completed: !card.completed, // Toggle the completed state
+      };
+
+      const response = await fetch(
+        `http://localhost:5000/api/cards/${card._id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updatedCard),
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to update card");
+
+      const newCard = await response.json();
+      handleCardUpdate(newCard); // Update the card in the state
+    } catch (error) {
+      console.error("Error updating card:", error);
+      setError("Failed to update card");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -265,11 +358,20 @@ export default function BoardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: board.backgroundColor || "#ffffff" }}
+    >
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
+              <button
+                onClick={() => router.back()}
+                className="mr-4 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+              >
+                🏠
+              </button>
               <h1 className="text-2xl font-bold text-gray-900">
                 {board.title}
               </h1>
@@ -293,23 +395,38 @@ export default function BoardPage() {
           </div>
         )}
 
-        <form onSubmit={handleCreateList} className="mb-8">
-          <div className="flex gap-4">
-            <input
-              type="text"
-              value={newListTitle}
-              onChange={(e) => setNewListTitle(e.target.value)}
-              placeholder="Enter list title"
-              className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Create List
-            </button>
-          </div>
-        </form>
+        <div className="mb-8">
+          <button
+            onClick={() => setShowListForm(!showListForm)}
+            className="w-full p-6 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          >
+            {showListForm ? "Cancel" : "Create New List"}
+          </button>
+        </div>
+
+        {showListForm && (
+          <form
+            onSubmit={handleCreateList}
+            className="mb-8 p-6 bg-white rounded-lg shadow-sm"
+          >
+            <div className="flex flex-col gap-4">
+              <input
+                type="text"
+                value={newListTitle}
+                onChange={(e) => setNewListTitle(e.target.value)}
+                placeholder="Enter list title"
+                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                required
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Create List
+              </button>
+            </div>
+          </form>
+        )}
 
         <DragDropContext onDragEnd={handleDragEnd}>
           <Droppable droppableId="lists" type="list" direction="horizontal">
@@ -333,11 +450,32 @@ export default function BoardPage() {
                       >
                         <div
                           {...provided.dragHandleProps}
-                          className="bg-white rounded-lg shadow-sm p-4"
+                          className="bg-white rounded-lg shadow-sm p-4 relative"
                         >
                           <h3 className="text-lg font-medium text-gray-900 mb-4">
                             {list.title}
                           </h3>
+
+                          <button
+                            onClick={() => toggleMenu(list._id)}
+                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+                            aria-label="Options"
+                          >
+                            ⚙️
+                          </button>
+
+                          {activeMenuListId === list._id && (
+                            <div className="absolute right-4 top-12 bg-white border rounded shadow-md z-10">
+                              <ul className="py-2">
+                                <li
+                                  onClick={() => handleDeleteList(list._id)}
+                                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                                >
+                                  Delete List
+                                </li>
+                              </ul>
+                            </div>
+                          )}
 
                           <Droppable droppableId={list._id} type="card">
                             {(provided: DroppableProvided) => (
@@ -357,9 +495,17 @@ export default function BoardPage() {
                                         ref={provided.innerRef}
                                         {...provided.draggableProps}
                                         {...provided.dragHandleProps}
-                                        className="bg-white p-3 rounded shadow-sm hover:shadow-md cursor-pointer"
+                                        className="bg-white p-3 rounded shadow-sm hover:shadow-md cursor-pointer flex items-center"
                                         onClick={() => setSelectedCard(card)}
                                       >
+                                        <input
+                                          type="checkbox"
+                                          checked={card.completed}
+                                          onChange={() =>
+                                            handleCardCompletionToggle(card)
+                                          }
+                                          className="mr-2"
+                                        />
                                         <h4 className="text-sm font-medium text-gray-900">
                                           {card.title}
                                         </h4>
