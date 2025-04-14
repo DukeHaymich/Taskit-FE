@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -12,6 +12,7 @@ import {
   DraggableProvided,
 } from "@hello-pangea/dnd";
 import CardModal from "@/components/CardModal";
+import { format } from "date-fns";
 
 interface Card {
   _id: string;
@@ -51,6 +52,7 @@ export default function BoardPage() {
   const [error, setError] = useState("");
   const [activeMenuListId, setActiveMenuListId] = useState<string | null>(null);
   const [showListForm, setShowListForm] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -120,6 +122,8 @@ export default function BoardPage() {
     e.preventDefault();
     if (!newCardTitle.trim() || !activeList) return;
 
+    // Only set dueDate if it is specified
+
     try {
       const response = await fetch("http://localhost:5000/api/cards", {
         method: "POST",
@@ -149,7 +153,7 @@ export default function BoardPage() {
         };
       });
       setNewCardTitle("");
-      setActiveList(null);
+      inputRef.current?.focus();
     } catch (error) {
       console.error("Error creating card:", error);
       setError("Failed to create card");
@@ -318,6 +322,8 @@ export default function BoardPage() {
         completed: !card.completed, // Toggle the completed state
       };
 
+      // Call the API to update the card's completion state
+      handleCardUpdate(updatedCard); // Update the card in the state
       const response = await fetch(
         `http://localhost:5000/api/cards/${card._id}`,
         {
@@ -331,14 +337,28 @@ export default function BoardPage() {
         }
       );
 
-      if (!response.ok) throw new Error("Failed to update card");
-
-      const newCard = await response.json();
-      handleCardUpdate(newCard); // Update the card in the state
+      if (!response.ok) {
+        updatedCard.completed = card.completed;
+        handleCardUpdate(updatedCard);
+        throw new Error("Failed to update card");
+      }
     } catch (error) {
       console.error("Error updating card:", error);
       setError("Failed to update card");
     }
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    setBoard((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        lists: prev.lists.map((list) => ({
+          ...list,
+          cards: list.cards.filter((card) => card._id !== cardId),
+        })),
+      };
+    });
   };
 
   if (loading) {
@@ -359,7 +379,7 @@ export default function BoardPage() {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen flex flex-col"
       style={{ backgroundColor: board.backgroundColor || "#ffffff" }}
     >
       <nav className="bg-white shadow-sm">
@@ -388,7 +408,7 @@ export default function BoardPage() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="flex-grow overflow-y-auto py-6 sm:px-6 lg:px-8">
         {error && (
           <div className="mb-4 rounded-md bg-red-50 p-4">
             <div className="text-sm text-red-700">{error}</div>
@@ -415,7 +435,7 @@ export default function BoardPage() {
                 value={newListTitle}
                 onChange={(e) => setNewListTitle(e.target.value)}
                 placeholder="Enter list title"
-                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
                 required
               />
               <button
@@ -482,7 +502,7 @@ export default function BoardPage() {
                               <div
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
-                                className="space-y-2"
+                                className="space-y-2 max-h-[55vh] overflow-y-auto"
                               >
                                 {list.cards.map((card, index) => (
                                   <Draggable
@@ -495,20 +515,40 @@ export default function BoardPage() {
                                         ref={provided.innerRef}
                                         {...provided.draggableProps}
                                         {...provided.dragHandleProps}
-                                        className="bg-white p-3 rounded shadow-sm hover:shadow-md cursor-pointer flex items-center"
-                                        onClick={() => setSelectedCard(card)}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={card.completed}
-                                          onChange={() =>
-                                            handleCardCompletionToggle(card)
+                                        className="bg-white p-3 rounded shadow-sm hover:shadow-md cursor-pointer flex flex-col items-start"
+                                        onClick={(e) => {
+                                          if (
+                                            e.target instanceof
+                                              HTMLInputElement &&
+                                            e.target.type === "checkbox"
+                                          ) {
+                                            return; // Prevent card selection if checkbox is clicked
                                           }
-                                          className="mr-2"
-                                        />
-                                        <h4 className="text-sm font-medium text-gray-900">
-                                          {card.title}
-                                        </h4>
+                                          setSelectedCard(card); // Set the selected card for editing
+                                        }}
+                                      >
+                                        <div className="flex items-center w-full">
+                                          <input
+                                            type="checkbox"
+                                            checked={card.completed}
+                                            onChange={() => {
+                                              handleCardCompletionToggle(card);
+                                            }}
+                                            className="mr-2"
+                                          />
+                                          <h4 className="text-sm font-medium text-gray-900">
+                                            {card.title}
+                                          </h4>
+                                        </div>
+                                        {card.dueDate && (
+                                          <div className="mt-1 text-sm text-gray-600 border border-gray-300 rounded p-1">
+                                            🕓{" "}
+                                            {format(
+                                              new Date(card.dueDate),
+                                              "MM/dd/yy HH:mm"
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </Draggable>
@@ -524,14 +564,30 @@ export default function BoardPage() {
                               className="mt-4"
                             >
                               <input
+                                ref={inputRef}
                                 type="text"
                                 value={newCardTitle}
                                 onChange={(e) =>
                                   setNewCardTitle(e.target.value)
                                 }
                                 placeholder="Enter card title"
-                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
                                 autoFocus
+                                onBlur={() => {
+                                  setActiveList(null);
+                                  setNewCardTitle("");
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleCreateCard(
+                                      {
+                                        preventDefault: () => {},
+                                      } as React.FormEvent,
+                                      list._id
+                                    );
+                                    e.preventDefault();
+                                  }
+                                }}
                               />
                               <div className="mt-2 flex gap-2">
                                 <button
@@ -578,6 +634,7 @@ export default function BoardPage() {
           isOpen={!!selectedCard}
           onClose={() => setSelectedCard(null)}
           onUpdate={handleCardUpdate}
+          onDelete={handleDeleteCard}
         />
       )}
     </div>

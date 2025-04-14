@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 interface Card {
   _id: string;
@@ -17,6 +17,7 @@ interface CardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (updatedCard: Card) => void;
+  onDelete: (cardId: string) => void;
 }
 
 export default function CardModal({
@@ -24,6 +25,7 @@ export default function CardModal({
   isOpen,
   onClose,
   onUpdate,
+  onDelete,
 }: CardModalProps) {
   const [title, setTitle] = useState(card.title || "");
   const [description, setDescription] = useState(card.description || "");
@@ -43,7 +45,7 @@ export default function CardModal({
     );
   }, [card]);
 
-  const handleSave = async () => {
+  const handleSave = async (dueDateValue?: Date | null) => {
     try {
       const response = await fetch(
         `http://localhost:5000/api/cards/${card._id}`,
@@ -56,7 +58,7 @@ export default function CardModal({
             title,
             description,
             completed,
-            dueDate: dueDate ? new Date(dueDate) : null,
+            dueDate: dueDateValue,
           }),
           credentials: "include",
         }
@@ -75,12 +77,35 @@ export default function CardModal({
 
   const handleCompletedChange = (checked: boolean) => {
     setCompleted(checked);
-    handleSave(); // Save immediately when completed state changes
+    handleSave();
   };
 
   const handleDueDateChange = (value: string) => {
     setDueDate(value);
-    handleSave(); // Save immediately when due date changes
+    handleSave(value ? new Date(value) : null);
+  };
+
+  const handleDelete = async () => {
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/cards/${card._id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to delete card");
+
+      onDelete(card._id);
+      onClose();
+    } catch (error) {
+      console.error("Error deleting card:", error);
+      setError("Failed to delete card");
+    }
   };
 
   if (!isOpen) return null;
@@ -148,42 +173,6 @@ export default function CardModal({
                 {description || "Add a description..."}
               </p>
             )}
-
-            <div className="flex justify-end gap-2">
-              {isEditing ? (
-                <>
-                  <button
-                    onClick={() => {
-                      setIsEditing(false);
-                      setTitle(card.title || "");
-                      setDescription(card.description || "");
-                      setCompleted(card.completed || false);
-                      setDueDate(
-                        card.dueDate
-                          ? new Date(card.dueDate).toISOString().slice(0, 16)
-                          : ""
-                      );
-                    }}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    Save
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
           </div>
 
           <div className="mb-6">
@@ -206,6 +195,48 @@ export default function CardModal({
               onChange={(e) => handleDueDateChange(e.target.value)}
               className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
             />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            {isEditing ? (
+              <>
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setTitle(card.title || "");
+                    setDescription(card.description || "");
+                    setCompleted(card.completed || false);
+                    setDueDate(
+                      card.dueDate
+                        ? new Date(card.dueDate).toISOString().slice(0, 16)
+                        : ""
+                    );
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSave()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  Save
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Edit
+              </button>
+            )}
+            <button
+              onClick={handleDelete}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+              Delete Card
+            </button>
           </div>
         </div>
       </div>
