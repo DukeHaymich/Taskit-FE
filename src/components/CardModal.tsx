@@ -8,6 +8,8 @@ interface Card {
   description?: string;
   list: string;
   position: number;
+  completed: boolean;
+  dueDate?: Date;
 }
 
 interface CardModalProps {
@@ -23,14 +25,22 @@ export default function CardModal({
   onClose,
   onUpdate,
 }: CardModalProps) {
-  const [title, setTitle] = useState(card.title);
+  const [title, setTitle] = useState(card.title || "");
   const [description, setDescription] = useState(card.description || "");
+  const [completed, setCompleted] = useState(card.completed || false);
+  const [dueDate, setDueDate] = useState(
+    card.dueDate ? new Date(card.dueDate).toISOString().slice(0, 16) : ""
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setTitle(card.title);
+    setTitle(card.title || "");
     setDescription(card.description || "");
+    setCompleted(card.completed || false);
+    setDueDate(
+      card.dueDate ? new Date(card.dueDate).toISOString().slice(0, 16) : ""
+    );
   }, [card]);
 
   const handleSave = async () => {
@@ -45,6 +55,8 @@ export default function CardModal({
           body: JSON.stringify({
             title,
             description,
+            completed,
+            dueDate: dueDate ? new Date(dueDate) : null,
           }),
           credentials: "include",
         }
@@ -59,6 +71,16 @@ export default function CardModal({
       console.error("Error updating card:", error);
       setError("Failed to update card");
     }
+  };
+
+  const handleCompletedChange = (checked: boolean) => {
+    setCompleted(checked);
+    handleSave(); // Save immediately when completed state changes
+  };
+
+  const handleDueDateChange = (value: string) => {
+    setDueDate(value);
+    handleSave(); // Save immediately when due date changes
   };
 
   if (!isOpen) return null;
@@ -126,36 +148,64 @@ export default function CardModal({
                 {description || "Add a description..."}
               </p>
             )}
-          </div>
 
-          <div className="flex justify-end gap-2">
-            {isEditing ? (
-              <>
+            <div className="flex justify-end gap-2">
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsEditing(false);
+                      setTitle(card.title || "");
+                      setDescription(card.description || "");
+                      setCompleted(card.completed || false);
+                      setDueDate(
+                        card.dueDate
+                          ? new Date(card.dueDate).toISOString().slice(0, 16)
+                          : ""
+                      );
+                    }}
+                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  >
+                    Save
+                  </button>
+                </>
+              ) : (
                 <button
-                  onClick={() => {
-                    setIsEditing(false);
-                    setTitle(card.title);
-                    setDescription(card.description || "");
-                  }}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
+                  onClick={() => setIsEditing(true)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
-                  Save
+                  Edit
                 </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Edit
-              </button>
-            )}
+              )}
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={completed}
+                onChange={(e) => handleCompletedChange(e.target.checked)}
+                className="mr-2"
+              />
+              <span className="text-gray-700">Completed</span>
+            </label>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-gray-700 mb-2">Due Date</label>
+            <input
+              type="datetime-local"
+              value={dueDate}
+              onChange={(e) => handleDueDateChange(e.target.value)}
+              className="w-full border rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
         </div>
       </div>

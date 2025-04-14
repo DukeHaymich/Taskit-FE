@@ -42,8 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         const userData = await authApi.checkAuth(token);
-
         setUser(userData);
+        setToken(token);
       } catch (error) {
         console.error("Auth check failed:", error);
       } finally {
@@ -63,7 +63,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (name: string, email: string, password: string) => {
     await authApi.register(name, email, password);
-
     router.push("/auth/login");
   };
 

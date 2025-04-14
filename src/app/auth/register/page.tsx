@@ -6,6 +6,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useEffect } from "react";
+import { redirect } from "next/navigation";
 
 const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -16,7 +18,14 @@ const registerSchema = z.object({
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
-  const { register: registerUser } = useAuth();
+  const { register: registerUser, token } = useAuth();
+
+  useEffect(() => {
+    if (token) {
+      redirect("/boards");
+    }
+  }, [token]);
+
   const {
     register,
     handleSubmit,
